@@ -1,4 +1,6 @@
 # PyCharm meta
 .idea
+**/__pycache__
+**/.ipynb_checkpoints
 # Dataset
 data
