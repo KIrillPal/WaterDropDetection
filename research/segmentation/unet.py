@@ -100,6 +100,11 @@ class UNet(nn.Module):
         return self.output(x)
 
 
+def init_all(model, init_func, *params, **kwargs):
+    for p in model.parameters():
+        init_func(p, *params, **kwargs)
+
+
 def test():
     image = torch.randn((32, 3, 161, 161))
     model = UNet(in_channels=3)
