@@ -4,3 +4,5 @@
 **/.ipynb_checkpoints
 # Dataset
 data
+# Checkpoint
+**/checkpoint.pt
