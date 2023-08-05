@@ -5,4 +5,4 @@
 # Dataset
 data
 # Checkpoint
-**/checkpoint.pt
+**/checkpoints/*
