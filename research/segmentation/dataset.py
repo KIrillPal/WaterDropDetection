@@ -23,16 +23,18 @@ def load_stereo(image_dir, mask_dir):
 class WaterDropDataset(Dataset):
     """Dataset with droplet masks on image lens"""
 
-    def __init__(self, image_dir, mask_dir, crop_shape=(64, 64)):
+    def __init__(self, image_dir, mask_dir, threshold, crop_shape=(64, 64)):
         """
         Arguments:
             image_dir (string): Directory with all the images.
             mask_dir (string):  Directory with all the masks.
+            threshold: (float): Threshold for binarization.
             crop_shape (tuple(h,w)): Shape to be cropped.
         """
         image_paths, mask_paths = load_stereo(image_dir, mask_dir)
         self.image_paths = image_paths
         self.mask_paths = mask_paths
+        self.threshold  = threshold
         self.crop_shape = crop_shape
 
     def __len__(self):
@@ -48,10 +50,15 @@ class WaterDropDataset(Dataset):
         to_tensor = transforms.ToTensor()
         image_norm = transforms.Normalize((0, 0, 0), (1, 1, 1))
         mask_norm = transforms.Normalize(0, 1)
-
+        
+        # Identical random crop for two images
         [image, mask] = crop([image, mask])
         image = image_norm(to_tensor(image))
         mask = mask_norm(to_tensor(mask))
+
+        # Binarization
+        binarize = lambda x: x > self.threshold
+        mask.apply_(binarize)
         return image, mask
 
     def random_split(self, val_percent=0.15):
