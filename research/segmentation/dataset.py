@@ -41,7 +41,7 @@ class WaterDropDataset(Dataset):
         return len(self.image_paths)
 
     def __getitem__(self, idx):
-        image = Image.open(self.image_paths[idx])
+        image = Image.open(self.image_paths[idx]).convert('HSV')
         mask = Image.open(self.mask_paths[idx]).convert('L')
         return self.transform(image, mask)
 
