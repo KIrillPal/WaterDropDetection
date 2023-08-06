@@ -53,15 +53,16 @@ class WaterDropDataset(Dataset):
         
         # Identical random crop for two images
         [image, mask] = crop([image, mask])
-
         # Computing additional layers for image
         saturation = to_tensor(self.__rgb_to_s(image))
-        
+        dwt = to_tensor(self.__dwt_map(image, 3))
+        dwt = torch.nan_to_num(dwt)
+
         image = image_norm(to_tensor(image))
         mask = mask_norm(to_tensor(mask))  
 
         # Combine layers
-        features = torch.cat((image, saturation), 0)
+        features = torch.cat((image, saturation, dwt), 0)
         
         # Binarization
         binarize = lambda x: x > self.threshold
@@ -77,3 +78,18 @@ class WaterDropDataset(Dataset):
     def __rgb_to_s(image):
         h, s, v = image.convert('HSV').split()
         return s
+
+    @staticmethod
+    def __dwt_map(image, level=2, brightness=5):
+        import numpy as np
+        import pywt
+        image = np.asarray(image.convert('L'))
+        dwt = pywt.wavedec2(image, 'haar', level=level)
+        map = dwt[0] / brightness
+        for LH, HL, HH in dwt[1:]:
+            map = np.concatenate((map, LH), axis=0)
+            col = np.concatenate((HL, HH), axis=0)
+            map = np.concatenate((map, col), axis=1)
+        if np.ptp(map) > 0: 
+            map = (map - np.min(map))/np.ptp(map)
+        return map.astype('float32')
