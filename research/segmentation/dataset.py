@@ -2,7 +2,7 @@ from pathlib import Path
 import torch
 from torch.utils.data import Dataset
 from torchvision.transforms import transforms
-from PIL import Image
+from PIL import Image, ImageFilter
 from custom_transforms import ListRandomCrop
 
 def load_stereo(image_dir, mask_dir):
@@ -55,8 +55,15 @@ class WaterDropDataset(Dataset):
         [image, mask] = crop([image, mask])
         # Computing additional layers for image
         saturation = to_tensor(self.__rgb_to_s(image))
+        #peak_np = self.__peak_map(image)
+        #peak = mask_norm(to_tensor(peak_np))
         dwt = to_tensor(self.__dwt_map(image, 3))
         dwt = torch.nan_to_num(dwt)
+        #from matplotlib import pyplot as plt
+        #fig, axs = plt.subplots(1, 2)
+        #axs[0].imshow(image)
+        #axs[1].imshow(peak_np, cmap='gray')
+        #plt.show()
 
         image = image_norm(to_tensor(image))
         mask = mask_norm(to_tensor(mask))  
@@ -93,3 +100,32 @@ class WaterDropDataset(Dataset):
         if np.ptp(map) > 0: 
             map = (map - np.min(map))/np.ptp(map)
         return map.astype('float32')
+
+    @staticmethod
+    def __ptp_map(image, window=(23, 23)):
+        import numpy as np
+        image = np.asarray(image.convert('L'))
+        from scipy.ndimage.filters import maximum_filter, minimum_filter
+        h,w = window
+        H,W = image.shape
+        # Use 2D max filter
+        maxs = maximum_filter(image, size=window) 
+        mins = minimum_filter(image, size=window)
+        
+        return maxs-mins
+        
+    @staticmethod
+    def __peak_map(image, pr=3, br=22):
+        blur = ImageFilter.BoxBlur
+        import numpy as np
+        peaks = np.asarray(image.filter(blur(pr)))
+        backs = np.asarray(image.filter(blur(br)))
+        map = np.mean(abs(peaks - backs), axis=2)
+        #from matplotlib import pyplot as plt
+        #fig, axs = plt.subplots(1, 2)
+        #axs[0].imshow(peaks)
+        #axs[1].imshow(backs)
+        #plt.show()
+        if np.ptp(map) > 0: 
+            map = (map - np.min(map))/np.ptp(map)
+        return map.astype(np.float32)
