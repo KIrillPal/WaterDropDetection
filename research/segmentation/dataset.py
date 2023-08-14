@@ -4,6 +4,7 @@ from torch.utils.data import Dataset
 from torchvision.transforms import transforms
 from PIL import Image, ImageFilter
 from custom_transforms import ListRandomCrop
+import numpy as np
 
 def load_stereo(image_dir, mask_dir):
     image_dir = Path(image_dir)
@@ -20,20 +21,50 @@ def load_stereo(image_dir, mask_dir):
     return image_paths, mask_paths
     
 
+def get_magnitude(image):
+    # Kernels
+    sobelGx_kernel =  np.asarray([
+        [ 1,  2,  1],
+        [ 0,  0,  0],
+        [-1, -2, -1]
+    ]) * 1.
+    sobelGy_kernel = sobelGx_kernel.T
+    #%%
+    # Apply Gx and Gy
+    from scipy import signal
+    Gx = signal.convolve2d(image, sobelGx_kernel)
+    Gy = signal.convolve2d(image, sobelGy_kernel)
+    # Calculate magnitude
+    magnitude = np.sqrt(Gx ** 2 + Gy ** 2)
+    magnitude = magnitude[1:-1, 1:-1]
+    return magnitude.astype(np.float32)
+
 class WaterDropDataset(Dataset):
     """Dataset with droplet masks on image lens"""
 
-    def __init__(self, image_dir, mask_dir, threshold, crop_shape=(64, 64)):
+    def __init__(self, mode, image_dir, mask_dir, binarization=False, threshold=0.5, crop_shape=(64, 64)):
         """
         Arguments:
+            mode (string): String with all using channels. 
+                As example: "RGBS" means 4 channels: Red, Green, Blue and Saturation
+                Channels:
+                1) R, G, B - rgb channels
+                2) H, S, V - hsv channels
+                3) S - satuation channel
+                4) D - dwt channel
+                5) P - peak channel
+                Their order in the output is set by their order in mode.
             image_dir (string): Directory with all the images.
             mask_dir (string):  Directory with all the masks.
-            threshold: (float): Threshold for binarization.
+            binarization (bool): Flag if binarization for mask is needed
+            threshold (float): Threshold for binarization.
             crop_shape (tuple(h,w)): Shape to be cropped.
         """
         image_paths, mask_paths = load_stereo(image_dir, mask_dir)
+        self.mode = mode
         self.image_paths = image_paths
         self.mask_paths = mask_paths
+        self.binarization = binarization
         self.threshold  = threshold
         self.crop_shape = crop_shape
 
@@ -54,11 +85,22 @@ class WaterDropDataset(Dataset):
         # Identical random crop for two images
         [image, mask] = crop([image, mask])
         # Computing additional layers for image
-        saturation = to_tensor(self.__rgb_to_s(image))
-        #peak_np = self.__peak_map(image)
-        #peak = mask_norm(to_tensor(peak_np))
-        dwt = to_tensor(self.__dwt_map(image, 3))
-        dwt = torch.nan_to_num(dwt)
+        if any(c in self.mode for c in 'HSV'):
+            h, s, v = image.convert('HSV').split()
+            if 'H' in self.mode:
+                h = mask_norm(to_tensor(h))
+            if 'S' in self.mode:
+                s = mask_norm(to_tensor(s))
+            if 'V' in self.mode:
+                v = mask_norm(to_tensor(v))
+        if 'D' in self.mode:
+            dwt = to_tensor(self.__dwt_map(image, 3))
+            dwt = torch.nan_to_num(dwt)
+
+        if 'P' in self.mode:
+            peak_np = self.__peak_map(image)
+            peak = mask_norm(to_tensor(peak_np))
+        
         #from matplotlib import pyplot as plt
         #fig, axs = plt.subplots(1, 2)
         #axs[0].imshow(image)
@@ -67,13 +109,36 @@ class WaterDropDataset(Dataset):
 
         image = image_norm(to_tensor(image))
         mask = mask_norm(to_tensor(mask))  
-
-        # Combine layers
-        features = torch.cat((image, saturation, dwt), 0)
+        
+        # Combine channels
+        channels = []
+        for c in self.mode:
+            match c:
+                case 'R':
+                    r = torch.stack([image[0]])
+                    channels.append(r)
+                case 'G':
+                    g = torch.stack([image[1]])
+                    channels.append(g)
+                case 'B':
+                    b = torch.stack([image[2]])
+                    channels.append(b)
+                case 'H':
+                    channels.append(h)
+                case 'S':
+                    channels.append(s)
+                case 'V':
+                    channels.append(v)
+                case 'D':
+                    channels.append(dwt)
+                case 'P':
+                    channels.append(peak)
+        features = torch.cat(channels, 0)
         
         # Binarization
-        binarize = lambda x: x > self.threshold
-        mask.apply_(binarize)
+        if self.binarization:
+            binarize = lambda x: x > self.threshold
+            mask.apply_(binarize)
         return features, mask
 
     def random_split(self, val_percent=0.15):
@@ -88,7 +153,6 @@ class WaterDropDataset(Dataset):
 
     @staticmethod
     def __dwt_map(image, level=2, brightness=5):
-        import numpy as np
         import pywt
         image = np.asarray(image.convert('L'))
         dwt = pywt.wavedec2(image, 'haar', level=level)
@@ -103,7 +167,6 @@ class WaterDropDataset(Dataset):
 
     @staticmethod
     def __ptp_map(image, window=(23, 23)):
-        import numpy as np
         image = np.asarray(image.convert('L'))
         from scipy.ndimage.filters import maximum_filter, minimum_filter
         h,w = window
@@ -117,15 +180,9 @@ class WaterDropDataset(Dataset):
     @staticmethod
     def __peak_map(image, pr=3, br=22):
         blur = ImageFilter.BoxBlur
-        import numpy as np
         peaks = np.asarray(image.filter(blur(pr)))
         backs = np.asarray(image.filter(blur(br)))
         map = np.mean(abs(peaks - backs), axis=2)
-        #from matplotlib import pyplot as plt
-        #fig, axs = plt.subplots(1, 2)
-        #axs[0].imshow(peaks)
-        #axs[1].imshow(backs)
-        #plt.show()
         if np.ptp(map) > 0: 
             map = (map - np.min(map))/np.ptp(map)
-        return map.astype(np.float32)
+        return get_magnitude(map)
