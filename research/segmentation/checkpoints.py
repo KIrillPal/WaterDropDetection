@@ -18,45 +18,26 @@ def print_checkpoint(checkpoint):
     print("Valid loss: ", checkpoint["val_loss"])
 
 
-def get_checkpoint(
-    model, 
-    mode, 
-    optim, 
-    loss_fn, 
-    epoch, 
-    train_loss, 
-    val_loss, 
-    iou,        
-    acc,
-    prec,
-    recall
-):
+def save_checkpoint(dir, model, optim, loss_fn, epoch, train_loss, val_loss):
     # Creating the name of checkpoint
-    name = model.__class__.__name__ + mode \
-        + loss_fn.__class__.__name__[:3]   \
-        + 't' + str(int(train_loss * 100)) \
-        + 'v' + str(int(val_loss * 100))   \
-        + 'e' + str(epoch)                 \
+    name = model.__class__.__name__       \
+        + optim.__class__.__name__        \
+        + loss_fn.__class__.__name__[:3]  \
+        + 't' + str(int(train_loss * 100))\
+        + 'v' + str(int(val_loss * 100))  \
+        + 'e' + str(epoch)                \
         + '.pt'
-    return {
-        "name": name,
+
+    from pathlib import Path
+    from torch import save
+    path = Path(dir, name)
+    save({
         "epochs": epoch + 1,
         "model_state_dict": model.state_dict(),
         "optimizer_state_dict": optim.state_dict(),
         "train_loss": train_loss,
-        "val_loss": val_loss,
-        "iou": iou,
-        "accuracy": acc,
-        "precision": prec,
-        "recall": recall
-    }
-
-
-def save_checkpoint(checkpoint, dir, name):
-    from pathlib import Path
-    from torch import save
-    path = Path(dir, name)
-    save(checkpoint, path)
+        "val_loss": val_loss
+    }, path)
     print(f"Progress saved to '{path}'")
 
 
@@ -81,11 +62,3 @@ def clear_checkpoints(checkpoint_dir, save_last=-1, excepts=[], condition=None):
     for path in to_remove:
         path.unlink()
         print("Removed", path)
-
-def print_checkpoint(checkpoint):
-    print("Train BCE loss:", checkpoint["train_loss"])
-    print("Valid BCE loss:", checkpoint["val_loss"])
-    print("IoU:      ", checkpoint["iou"], '\n')
-    print("Accuracy: ", checkpoint["accuracy"])
-    print("Precision:", checkpoint["precision"])
-    print("Recall:   ", checkpoint["recall"], '\n')
