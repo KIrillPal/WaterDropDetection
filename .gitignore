@@ -5,4 +5,5 @@
 # Dataset
 data
 # Checkpoint
-**.pt
+**/*.pt
+**/nullcheck

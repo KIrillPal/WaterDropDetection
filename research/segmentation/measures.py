@@ -34,11 +34,12 @@ def recall(y_true, y_pred):
     return mean / len(y_true)
 
 def IoU(y_true, y_pred):
+    from numpy import maximum
     mean = 0
     for y, z in zip(y_true, y_pred):
         if y.sum() + z.sum() == 0:
             continue
-        intersection = 2 * (y * z)
-        acc = intersection.sum() / (y.sum() + z.sum())
+        intersection = (y * z)
+        acc = intersection.sum() / maximum(y, z).sum()
         mean += acc
     return mean / len(y_true)
