@@ -1,24 +1,27 @@
+import sys
+sys.path.append('/beta/students/kondrashov/WaterDropDetection/research/segmentation')
+
 import torch
 from checkpoints import *
 from measures import *
 
 config = {
     "lr": 0.004,
-    "batch_size": 24,
-    "epochs": 40,
+    "batch_size": 16,
+    "epochs": 150,
     "threshold": 0.3,
     "init_from_checkpoint": False,
-    "input_mode": "HSV",
-    "milestones": [5, 8, 15, 25],
+    "input_mode": "RGBI",
+    "milestones": [10, 30, 50, 70, 85],
     "gamma":  0.63,
-    "image_dir": '../../data/derain/ALIGNED_PAIRS/CG_DROPLETS', #'../../data/stereo/train/image',
-    "mask_dir": '../../data/derain/ALIGNED_PAIRS/CG_MASKS', #'../../data/stereo/train/mask',
+    "image_dir": '../../data/stereo/train/image',
+    "mask_dir":  '../../data/stereo/train/mask',
     "device": "cuda" if torch.cuda.is_available() else "cpu",
     "checkpoint_dir": "checkpoints",
     "checkpoint": None, # if None loads last saved checkpoint
     "print_model": False,
     "binarization": True,
-    "seed": 3407 # if None uses random seed,
+    "seed": None # if None uses random seed,
 }
 
 config["channels"] = len(config["input_mode"]) - int('I' in config["input_mode"])
@@ -26,7 +29,11 @@ print(f"Training using {config['device']}")
 
 # Set seed
 if config["seed"] is not None:
-    torch.manual_seed(config["seed"])
+    seed = config["seed"]
+else:
+    seed = torch.random.seed()
+torch.manual_seed(seed)    
+print('Seed', seed)
 
 def random_split(dataset, val_percent=0.15, test_percent=0.15):
     val_size = int(len(dataset) * val_percent)
@@ -109,7 +116,7 @@ if config["init_from_checkpoint"]:
     print_checkpoint(checkpoint)
     start_epoch = checkpoint["epochs"]
 else:
-    init_weights(model, torch.nn.init.normal_, mean=0., std=1)
+    init_weights(model, torch.nn.init.uniform_, a = -1., b = 1.)
     print("Randomly initiated parameters")
     start_epoch = 0
 
@@ -132,7 +139,7 @@ def to_device(x, y):
     return x, y
 
 
-def validate(model, loss_fn):
+def validate(model, loss_fn, loader=val_loader):
     import math
     model.eval()
 
@@ -142,7 +149,7 @@ def validate(model, loss_fn):
     recalls = []
     ious = []
     with torch.no_grad():
-        for x, y in val_loader:
+        for x, y in loader:
             x, y = to_device(x, y)
             pred = model(x)
             loss = loss_fn(pred, y)
@@ -192,16 +199,18 @@ from datetime import datetime
 
 # Start wandb
 wandb.init(
-    name=config["input_mode"] + "_" + str(config["lr"]) + "_" + str(datetime.now()),
+    name= "REAL_" + config["input_mode"] + "_" + str(config["lr"]) + "_" + str(datetime.now()),
     project="water-drop-detection",
     config={
     "learning_rate": config["lr"],
     "architecture": "UNet",
     "dataset": "Stereo",
+    "seed": seed,
     "epochs": config["epochs"],
     "checkpoint": best_checkpoint
     }
 )
+print('Seed', seed)
 
 def train(save_checkpoints=True, lr=None):
     # If lr=None, learning rate is used from optimizer
@@ -273,5 +282,19 @@ save_checkpoint(
                 config["checkpoint_dir"],
                 best_checkpoint["name"]
             )
-wandb.finish()
 
+def test(checkpoint):
+        print("Name:", checkpoint["name"])
+        model.load_state_dict(checkpoint["model_state_dict"])
+        test_loss, iou, acc, prec, rec = validate(model, loss_fn, test_loader)
+        checkpoint["iou"] = iou
+        checkpoint["accuracy"] = acc
+        checkpoint["precision"] = prec
+        checkpoint["recall"] = rec
+        print("Test loss: ", test_loss)
+        print_checkpoint(checkpoint)
+        print("\n")
+
+test(best_checkpoint)
+
+wandb.finish()

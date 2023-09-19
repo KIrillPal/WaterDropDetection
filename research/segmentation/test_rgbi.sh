@@ -1,0 +1,32 @@
+python3 test/rgb.py
+python3 test/rgbi.py
+python3 test/rgb.py
+python3 test/rgbi.py
+python3 test/rgb.py
+python3 test/rgbi.py
+python3 test/rgb.py
+python3 test/rgbi.py
+python3 test/rgb.py
+python3 test/rgbi.py
+
+python3 test/rgb.py
+python3 test/rgbi.py
+python3 test/rgb.py
+python3 test/rgbi.py
+python3 test/rgb.py
+python3 test/rgbi.py
+python3 test/rgb.py
+python3 test/rgbi.py
+python3 test/rgb.py
+python3 test/rgbi.py
+
+python3 test/rgb.py
+python3 test/rgbi.py
+python3 test/rgb.py
+python3 test/rgbi.py
+python3 test/rgb.py
+python3 test/rgbi.py
+python3 test/rgb.py
+python3 test/rgbi.py
+python3 test/rgb.py
+python3 test/rgbi.py

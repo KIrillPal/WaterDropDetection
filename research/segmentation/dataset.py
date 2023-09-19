@@ -76,7 +76,7 @@ class WaterDropDataset(Dataset):
         mask = Image.open(self.mask_paths[idx]).convert('L')
         return self.transform(image, mask)
     
-    def transform(self, image, mask):
+    def transform(self, image, mask, depth=4):
         crop = ListRandomCrop(self.crop_shape)
         to_tensor = transforms.ToTensor()
         image_norm = transforms.Normalize((0, 0, 0), (1, 1, 1))
@@ -93,19 +93,11 @@ class WaterDropDataset(Dataset):
                 s = mask_norm(to_tensor(s))
             if 'V' in self.mode:
                 v = mask_norm(to_tensor(v))
-        if 'D' in self.mode:
+        if 'D' in self.mode or 'I' in self.mode:
             dwt = to_tensor(self.__dwt_map(image, 3))
-            dwt = torch.nan_to_num(dwt)
-
         if 'P' in self.mode:
             peak_np = self.__peak_map(image)
             peak = mask_norm(to_tensor(peak_np))
-        
-        #from matplotlib import pyplot as plt
-        #fig, axs = plt.subplots(1, 2)
-        #axs[0].imshow(image)
-        #axs[1].imshow(peak_np, cmap='gray')
-        #plt.show()
 
         image = image_norm(to_tensor(image))
         mask = mask_norm(to_tensor(mask))  
@@ -130,6 +122,8 @@ class WaterDropDataset(Dataset):
                 case 'V':
                     channels.append(v)
                 case 'D':
+                    channels.append(dwt)
+                case 'I':
                     channels.append(dwt)
                 case 'P':
                     channels.append(peak)
@@ -164,6 +158,15 @@ class WaterDropDataset(Dataset):
         if np.ptp(map) > 0: 
             map = (map - np.min(map))/np.ptp(map)
         return map.astype('float32')
+
+    @staticmethod
+    def __dwt_levels(image, level=2):
+        import pywt
+        image = np.asarray(image.convert('L'))
+        dwt = pywt.wavedec2(image, 'haar', level=level)
+        return [np.concatenate([LH, HL, HH]).astype('float32') 
+                for LH, HL, HH in dwt[1:]
+               ]
 
     @staticmethod
     def __ptp_map(image, window=(23, 23)):

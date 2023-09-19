@@ -5,6 +5,7 @@
 # Dataset
 data
 # Checkpoint
+**/checkpoints
 **/*.pt
 **/nullcheck
 **/wandb

@@ -12,12 +12,6 @@ def last_checkpoint(checkpoint_dir):
     return max(files, key=getctime)
 
 
-def print_checkpoint(checkpoint):
-    print("Epochs: ", checkpoint["epochs"])
-    print("Train loss: ", checkpoint["train_loss"])
-    print("Valid loss: ", checkpoint["val_loss"])
-
-
 def get_checkpoint(
     model, 
     mode, 
